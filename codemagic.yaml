@@ -7,14 +7,14 @@ workflows:
       node: 18.16.0
       xcode: latest
     scripts:
-      - name: Install dependencies
+      - name: Setup Package and Capacitor
         script: |
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/ios
           npx cap init Slock com.slock.app --web-dir .
           npx cap add ios
           npx cap copy ios
-      - name: Build iOS App (.ipa / App Bundle)
+      - name: Build iOS App Bundle
         script: |
           xcodebuild -workspace ios/App/App.xcworkspace \
                      -scheme App \
@@ -27,4 +27,3 @@ workflows:
                      clean build
     artifacts:
       - build/Build/Products/Release-iphoneos/*.app
-      - build/Build/Products/Release-iphoneos/*.ipa
