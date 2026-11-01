@@ -7,12 +7,10 @@ workflows:
       node: 22.11.0
       xcode: latest
     scripts:
-      - name: 1. Setup Project & Dependencies
+      - name: 1. Setup Dependencies and Config
         script: |
           npm init -y
           npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/ios@latest --save
-      - name: 2. Create Capacitor Config
-        script: |
           cat << 'EOF' > capacitor.config.json
           {
             "appId": "com.slock.app",
@@ -21,17 +19,18 @@ workflows:
             "bundledWebRuntime": false
           }
           EOF
-      - name: 3. Add iOS Platform & Sync
+      - name: 2. Generate iOS Platform Files
         script: |
-          npx cap add ios
-          npx cap copy ios
-      - name: 4. Build iOS App (.ipa)
+          npx cap add ios --force
+          npx cap sync ios
+      - name: 3. Compile iOS App Archive
         script: |
-          xcodebuild -workspace ios/App/App.xcworkspace \
+          cd ios/App
+          xcodebuild -project App.xcodeproj \
                      -scheme App \
                      -configuration Release \
                      -sdk iphoneos \
-                     -derivedDataPath build \
+                     -derivedDataPath ../../build \
                      CODE_SIGN_IDENTITY="" \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
