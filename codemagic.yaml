@@ -7,21 +7,23 @@ workflows:
       node: 22.11.0
       xcode: latest
     scripts:
-      - name: Initialize and Install Capacitor
+      - name: 1. Install Project Dependencies
         script: |
           npm init -y
           npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/ios@latest --save
-          npx cap init Slock com.slock.app --web-dir .
+      - name: 2. Initialize Capacitor Project
+        script: |
+          npx cap init Slock com.slock.app --web-dir . --yes
           npx cap add ios
           npx cap copy ios
-      - name: Verify iOS Workspace Exists
+      - name: 3. Verify Workspace Directory
         script: |
-          if [ ! -d "ios/App" ]; then
-            echo "Error: ios/App directory missing!"
-            exit 1
+          if [ ! -f "ios/App/App.xcworkspace/contents.xcworkspacedata" ]; then
+            echo "Error: Xcode workspace not found. Forcing manual generation..."
+            npx cap sync ios
           fi
           ls -la ios/App
-      - name: Build iOS App Bundle
+      - name: 4. Build iOS App (.ipa)
         script: |
           xcodebuild -workspace ios/App/App.xcworkspace \
                      -scheme App \
@@ -34,3 +36,4 @@ workflows:
                      clean build
     artifacts:
       - build/Build/Products/Release-iphoneos/*.app
+      - build/Build/Products/Release-iphoneos/*.ipa
