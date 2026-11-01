@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Slock</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        oled: '#000000',
+                        cardBg: '#0d0e12',
+                        accentTeal: '#00f2fe',
+                        accentBlue: '#4facfe',
+                        accentPurple: '#7f00ff',
+                        accentPink: '#ff007f'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Courier New', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #000000;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .day-chip input:checked + .day-btn {
+            background-color: #00f2fe;
+            color: #090a0f;
+            font-weight: 700;
+            border-color: #00f2fe;
+        }
+        .day-btn {
+            display: inline-block;
+            padding: 6px 10px;
+            font-size: 11px;
+            border-radius: 10px;
+            background: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .glow-teal {
+            box-shadow: 0 0 25px rgba(0, 242, 254, 0.25);
+        }
+        .glass-card {
+            background: rgba(18, 20, 29, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090a0f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col justify-between bg-oled text-slate-100">
+
+    <!-- Top Header -->
+    <header class="w-full px-6 py-4 flex items-center justify-between border-b border-slate-800/60 bg-black/40 backdrop-blur-md">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-accentTeal to-accentPurple flex items-center justify-center text-slate-950 font-bold text-lg shadow-lg">
+                <i class="fa-solid fa-clock"></i>
+            </div>
+            <h1 class="text-xl font-bold tracking-wider bg-gradient-to-r from-teal-400 via-cyan-400 to-purple-500 bg-clip-text text-transparent">
+                Slock
+            </h1>
+        </div>
+        <div id="statusIndicator" class="flex items-center gap-2 text-xs text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-full border border-slate-800">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="activeAlarmsCount">0 Alarms Active</span>
+        </div>
+    </header>
+
+    <!-- Main Dynamic Content Area -->
+    <main class="flex-1 overflow-y-auto relative p-4 md:p-8 flex items-center justify-center">
+
+        <!-- 1. CLOCK VIEW -->
+        <section id="view-clock" class="tab-view w-full max-w-2xl flex flex-col items-center justify-center gap-6 text-center">
+            <div class="glass-card w-full py-12 px-6 rounded-3xl relative overflow-hidden border border-slate-800/80 shadow-2xl">
+                <div class="absolute -top-24 -left-24 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <h2 class="text-xs uppercase tracking-widest text-teal-400 font-semibold mb-2">Current Local Time</h2>
+                <div id="clockTime" class="font-mono text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tight bg-gradient-to-b from-white via-slate-100 to-slate-400 bg-clip-text text-transparent my-4">
+                    00:00:00 AM
+                </div>
+                <div id="clockDate" class="text-base sm:text-lg text-slate-400 font-medium tracking-wide">
+                    Loading date...
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. ALARM VIEW -->
+        <section id="view-alarm" class="tab-view hidden w-full max-w-xl flex-col items-center gap-6">
+            <div class="glass-card w-full p-6 rounded-3xl border border-slate-800">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-bell text-teal-400"></i> Set New Alarm
+                    </h2>
+                </div>
+                <form id="alarmForm" class="flex flex-col gap-4">
+                    <div class="flex flex-col sm:flex-row items-center gap-4">
+                        <input type="time" id="alarmTimeInput" required class="w-full sm:w-auto flex-1 bg-slate-900 border border-slate-700 rounded-2xl px-4 py-3 text-2xl font-mono text-center text-teal-300 focus:outline-none focus:border-teal-400 transition">
+                        <input type="text" id="alarmLabelInput" placeholder="Label (optional)" class="w-full sm:w-auto flex-1 bg-slate-900 border border-slate-700 rounded-2xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-teal-400 transition">
+                    </div>
+                    
+                    <!-- Weekday Selector -->
+                    <div class="flex flex-col gap-2">
+                        <span class="text-xs font-semibold text-slate-400">Repeat Days:</span>
+                        <div class="flex items-center justify-between gap-1 sm:gap-2">
+                            <label class="day-chip"><input type="checkbox" value="0" class="alarm-day-input hidden"><span class="day-btn">Sun</span></label>
+                            <label class="day-chip"><input type="checkbox" value="1" class="alarm-day-input hidden"><span class="day-btn">Mon</span></label>
+                            <label class="day-chip"><input type="checkbox" value="2" class="alarm-day-input hidden"><span class="day-btn">Tue</span></label>
+                            <label class="day-chip"><input type="checkbox" value="3" class="alarm-day-input hidden"><span class="day-btn">Wed</span></label>
+                            <label class="day-chip"><input type="checkbox" value="4" class="alarm-day-input hidden"><span class="day-btn">Thu</span></label>
+                            <label class="day-chip"><input type="checkbox" value="5" class="alarm-day-input hidden"><span class="day-btn">Fri</span></label>
+                            <label class="day-chip"><input type="checkbox" value="6" class="alarm-day-input hidden"><span class="day-btn">Sat</span></label>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-teal-400 to-cyan-500 hover:from-teal-300 hover:to-cyan-400 text-slate-950 font-bold rounded-2xl transition shadow-lg shadow-teal-500/20 active:scale-95 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-plus"></i> Add Alarm
+                    </button>
+                </form>
+            </div>
+
+            <!-- Active Alarms List -->
+            <div class="w-full flex flex-col gap-3">
+                <h3 class="text-xs uppercase tracking-wider text-slate-400 font-bold px-2">Your Alarms</h3>
+                <div id="alarmsContainer" class="flex flex-col gap-3 max-h-72 overflow-y-auto pr-1">
+                    <div class="text-center py-8 text-slate-500 text-sm glass-card rounded-2xl">No alarms configured.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. STOPWATCH VIEW -->
+        <section id="view-stopwatch" class="tab-view hidden w-full max-w-xl flex-col items-center gap-6">
+            <div class="glass-card w-full py-8 px-6 rounded-3xl text-center border border-slate-800 relative">
+                <div id="stopwatchDisplay" class="font-mono text-5xl sm:text-7xl font-bold tracking-tight text-white mb-6">
+                    00:00.00
+                </div>
+                
+                <div class="flex items-center justify-center gap-4">
+                    <button id="swStartBtn" onclick="toggleStopwatch()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-emerald-400 to-teal-500 text-slate-950 font-bold text-xl sm:text-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition">
+                        <i class="fa-solid fa-play ml-1"></i>
+                    </button>
+                    <button id="swLapBtn" onclick="recordLap()" disabled class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-800 text-slate-400 font-bold text-lg flex items-center justify-center border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 active:scale-95 transition">
+                        <i class="fa-solid fa-flag"></i>
+                    </button>
+                    <button id="swResetBtn" onclick="resetStopwatch()" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-800 text-slate-400 font-bold text-lg flex items-center justify-center border border-slate-700 hover:bg-slate-700 active:scale-95 transition">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Laps Container -->
+            <div class="w-full glass-card rounded-3xl p-4 border border-slate-800 flex flex-col h-56">
+                <div class="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-400 pb-3 border-b border-slate-800 px-4">
+                    <span>Lap #</span>
+                    <span>Split Time</span>
+                    <span>Total Time</span>
+                </div>
+                <div id="lapsList" class="flex-1 overflow-y-auto flex flex-col gap-2 mt-2 pr-1">
+                    <div class="text-center py-10 text-slate-500 text-sm">No laps recorded.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. COUNTDOWN TIMER VIEW -->
+        <section id="view-timer" class="tab-view hidden w-full max-w-xl flex-col items-center gap-6">
+            <div class="glass-card w-full p-8 rounded-3xl border border-slate-800 flex flex-col items-center">
+                <!-- Time Input Displays -->
+                <div id="timerInputControls" class="flex items-center justify-center gap-2 sm:gap-4 mb-8">
+                    <div class="flex flex-col items-center">
+                        <input type="number" id="timerHours" min="0" max="99" value="0" class="w-20 h-20 sm:w-24 sm:h-24 bg-slate-900 border border-slate-700 rounded-2xl text-center font-mono text-3xl sm:text-4xl text-teal-300 focus:outline-none focus:border-teal-400">
+                        <span class="text-xs uppercase text-slate-400 mt-2 font-bold">Hours</span>
+                    </div>
+                    <span class="text-3xl font-mono text-slate-500 -mt-6">:</span>
+                    <div class="flex flex-col items-center">
+                        <input type="number" id="timerMinutes" min="0" max="59" value="0" class="w-20 h-20 sm:w-24 sm:h-24 bg-slate-900 border border-slate-700 rounded-2xl text-center font-mono text-3xl sm:text-4xl text-teal-300 focus:outline-none focus:border-teal-400">
+                        <span class="text-xs uppercase text-slate-400 mt-2 font-bold">Minutes</span>
+                    </div>
+                    <span class="text-3xl font-mono text-slate-500 -mt-6">:</span>
+                    <div class="flex flex-col items-center">
+                        <input type="number" id="timerSeconds" min="0" max="59" value="0" class="w-20 h-20 sm:w-24 sm:h-24 bg-slate-900 border border-slate-700 rounded-2xl text-center font-mono text-3xl sm:text-4xl text-teal-300 focus:outline-none focus:border-teal-400">
+                        <span class="text-xs uppercase text-slate-400 mt-2 font-bold">Seconds</span>
+                    </div>
+                </div>
+
+                <!-- Timer Running Display -->
+                <div id="timerActiveDisplay" class="hidden font-mono text-6xl sm:text-7xl font-extrabold text-white my-4 tracking-tight">
+                    00:00:00
+                </div>
+
+                <!-- Controls -->
+                <div class="flex items-center gap-4 mt-2">
+                    <button id="timerStartBtn" onclick="toggleTimer()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 text-slate-950 font-bold text-xl sm:text-2xl flex items-center justify-center shadow-lg shadow-cyan-500/20 hover:scale-105 active:scale-95 transition">
+                        <i class="fa-solid fa-play ml-1"></i>
+                    </button>
+                    <button id="timerResetBtn" onclick="resetTimer()" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-800 text-slate-400 font-bold text-lg flex items-center justify-center border border-slate-700 hover:bg-slate-700 active:scale-95 transition">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. SETTINGS VIEW -->
+        <section id="view-settings" class="tab-view hidden w-full max-w-xl flex-col gap-6">
+            <!-- iOS Background & Permission Card -->
+            <div class="glass-card w-full p-6 rounded-3xl border border-slate-800">
+                <h2 class="text-lg font-bold text-slate-200 mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-teal-400"></i> App Permissions & Audio Setup
+                </h2>
+                <p class="text-xs text-slate-400 mb-4 leading-relaxed">
+                    Grant notification permissions to allow background alarm ringing:
+                </p>
+                <button onclick="requestNotificationPermission()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-teal-300 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition">
+                    <i class="fa-solid fa-bell"></i> Request Notification Permissions
+                </button>
+            </div>
+
+            <div class="glass-card w-full p-6 rounded-3xl border border-slate-800">
+                <h2 class="text-lg font-bold text-slate-200 mb-6 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-purple-400"></i> Custom Audio Files
+                </h2>
+
+                <div class="flex flex-col gap-6">
+                    <!-- Alarm Sound Setting -->
+                    <div class="flex flex-col gap-2 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-sm text-slate-200">Alarm Sound</span>
+                            <span id="alarmSoundName" class="text-xs text-teal-400 truncate max-w-[150px]">Default Tone</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <label class="flex-1 cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold py-2.5 px-3 rounded-xl text-center transition flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-folder-open text-teal-400"></i> Select MP3 File
+                                <input type="file" accept="audio/mp3,audio/mpeg,audio/*,.mp3" class="hidden" onchange="handleAudioUpload(event, 'alarm')">
+                            </label>
+                            <button onclick="testSound('alarm')" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition">
+                                <i class="fa-solid fa-volume-high"></i> Test
+                            </button>
+                            <button onclick="resetSound('alarm')" class="px-3 py-2.5 bg-slate-800/50 hover:bg-slate-700 text-red-400 border border-slate-700 rounded-xl text-xs transition" title="Reset to Default">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Stopwatch Sound Setting -->
+                    <div class="flex flex-col gap-2 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-sm text-slate-200">Stopwatch Lap Sound</span>
+                            <span id="stopwatchSoundName" class="text-xs text-teal-400 truncate max-w-[150px]">Default Tone</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <label class="flex-1 cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold py-2.5 px-3 rounded-xl text-center transition flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-folder-open text-teal-400"></i> Select MP3 File
+                                <input type="file" accept="audio/mp3,audio/mpeg,audio/*,.mp3" class="hidden" onchange="handleAudioUpload(event, 'stopwatch')">
+                            </label>
+                            <button onclick="testSound('stopwatch')" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition">
+                                <i class="fa-solid fa-volume-high"></i> Test
+                            </button>
+                            <button onclick="resetSound('stopwatch')" class="px-3 py-2.5 bg-slate-800/50 hover:bg-slate-700 text-red-400 border border-slate-700 rounded-xl text-xs transition" title="Reset to Default">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Countdown Sound Setting -->
+                    <div class="flex flex-col gap-2 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-sm text-slate-200">Countdown Timer Sound</span>
+                            <span id="timerSoundName" class="text-xs text-teal-400 truncate max-w-[150px]">Default Tone</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <label class="flex-1 cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold py-2.5 px-3 rounded-xl text-center transition flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-folder-open text-teal-400"></i> Select MP3 File
+                                <input type="file" accept="audio/mp3,audio/mpeg,audio/*,.mp3" class="hidden" onchange="handleAudioUpload(event, 'timer')">
+                            </label>
+                            <button onclick="testSound('timer')" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition">
+                                <i class="fa-solid fa-volume-high"></i> Test
+                            </button>
+                            <button onclick="resetSound('timer')" class="px-3 py-2.5 bg-slate-800/50 hover:bg-slate-700 text-red-400 border border-slate-700 rounded-xl text-xs transition" title="Reset to Default">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="w-full bg-slate-950/90 border-t border-slate-800/80 backdrop-blur-lg px-4 py-2">
+        <div class="max-w-xl mx-auto flex items-center justify-around">
+            <button onclick="switchTab('clock')" id="nav-clock" class="nav-btn active flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl text-teal-400 transition">
+                <i class="fa-solid fa-clock text-lg"></i>
+                <span class="text-[10px] font-medium tracking-wide">Clock</span>
+            </button>
+            <button onclick="switchTab('alarm')" id="nav-alarm" class="nav-btn flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl text-slate-500 hover:text-slate-300 transition">
+                <i class="fa-solid fa-bell text-lg"></i>
+                <span class="text-[10px] font-medium tracking-wide">Alarm</span>
+            </button>
+            <button onclick="switchTab('stopwatch')" id="nav-stopwatch" class="nav-btn flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl text-slate-500 hover:text-slate-300 transition">
+                <i class="fa-solid fa-stopwatch text-lg"></i>
+                <span class="text-[10px] font-medium tracking-wide">Stopwatch</span>
+            </button>
+            <button onclick="switchTab('timer')" id="nav-timer" class="nav-btn flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl text-slate-500 hover:text-slate-300 transition">
+                <i class="fa-solid fa-hourglass-half text-lg"></i>
+                <span class="text-[10px] font-medium tracking-wide">Timer</span>
+            </button>
+            <button onclick="switchTab('settings')" id="nav-settings" class="nav-btn flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl text-slate-500 hover:text-slate-300 transition">
+                <i class="fa-solid fa-gear text-lg"></i>
+                <span class="text-[10px] font-medium tracking-wide">Settings</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Triggered Alarm Modal -->
+    <div id="alarmModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 hidden flex-col items-center justify-center p-6 text-center">
+        <div class="glass-card p-8 rounded-3xl border border-teal-500/50 max-w-sm w-full flex flex-col items-center gap-4">
+            <div class="w-20 h-20 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center text-4xl mb-2">
+                <i class="fa-solid fa-bell animate-pulse"></i>
+            </div>
+            <h3 id="modalAlarmTime" class="text-4xl font-mono font-bold text-white">00:00 AM</h3>
+            <p id="modalAlarmLabel" class="text-sm text-slate-300">Alarm Triggered!</p>
+            <button onclick="stopAlarmModal()" class="mt-4 w-full py-3.5 bg-gradient-to-r from-teal-400 to-cyan-500 text-slate-950 font-bold rounded-2xl shadow-lg shadow-teal-500/30 active:scale-95 transition">
+                Dismiss
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function requestNotificationPermission() {
+            if ("Notification" in window) {
+                Notification.requestPermission().then(permission => {
+                    if (permission === "granted") {
+                        alert("Notification permission granted!");
+                    } else {
+                        alert("Permission denied or dismissed.");
+                    }
+                });
+            } else {
+                alert("Notifications are not supported in this environment.");
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-view').forEach(view => {
+                view.classList.add('hidden');
+                view.classList.remove('flex');
+            });
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-teal-400');
+                btn.classList.add('text-slate-500');
+            });
+
+            const activeView = document.getElementById(`view-${tabId}`);
+            if (activeView) {
+                activeView.classList.remove('hidden');
+                activeView.classList.add('flex');
+            }
+
+            const activeNav = document.getElementById(`nav-${tabId}`);
+            if (activeNav) {
+                activeNav.classList.add('text-teal-400');
+                activeNav.classList.remove('text-slate-500');
+            }
+        }
+
+        // --- INDEXED DB AUDIO STORAGE ---
+        let db;
+        const request = indexedDB.open("SlockDB", 1);
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            if (!db.objectStoreNames.contains("sounds")) {
+                db.createObjectStore("sounds");
+            }
+        };
+        request.onsuccess = (e) => {
+            db = e.target.result;
+            loadStoredSoundNames();
+        };
+
+        function saveSoundDB(key, arrayBuffer, fileName) {
+            const tx = db.transaction("sounds", "readwrite");
+            const store = tx.objectStore("sounds");
+            store.put({ buffer: arrayBuffer, name: fileName }, key);
+        }
+
+        function getSoundDB(key) {
+            return new Promise((resolve) => {
+                if (!db) return resolve(null);
+                const tx = db.transaction("sounds", "readonly");
+                const store = tx.objectStore("sounds");
+                const req = store.get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
+            });
+        }
+
+        function deleteSoundDB(key) {
+            const tx = db.transaction("sounds", "readwrite");
+            const store = tx.objectStore("sounds");
+            store.delete(key);
+        }
+
+        async function loadStoredSoundNames() {
+            const modes = ['alarm', 'stopwatch', 'timer'];
+            for (const mode of modes) {
+                const item = await getSoundDB(mode);
+                const nameElem = document.getElementById(`${mode}SoundName`);
+                if (nameElem) {
+                    nameElem.textContent = item && item.name ? item.name : 'Default Tone';
+                }
+            }
+        }
+
+        async function handleAudioUpload(event, mode) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const arrayBuffer = e.target.result;
+                saveSoundDB(mode, arrayBuffer, file.name);
+                const nameElem = document.getElementById(`${mode}SoundName`);
+                if (nameElem) {
+                    nameElem.textContent = file.name;
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function testSound(mode) {
+            playSound(mode);
+        }
+
+        function resetSound(mode) {
+            deleteSoundDB(mode);
+            const nameElem = document.getElementById(`${mode}SoundName`);
+            if (nameElem) {
+                nameElem.textContent = 'Default Tone';
+            }
+        }
+
+        // --- SYNTHETIC AUDIO FALLBACK ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSynthBeep(type = 'alarm') {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'alarm' || type === 'timer') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.6);
+            } else {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            }
+        }
+
+        let currentActiveAudioSource = null;
+
+        async function playSound(mode) {
+            try {
+                const soundData = await getSoundDB(mode);
+                if (soundData && soundData.buffer) {
+                    if (currentActiveAudioSource) {
+                        try { currentActiveAudioSource.stop(); } catch(e){}
+                    }
+                    const bufferCopy = soundData.buffer.slice(0);
+                    const decodedData = await audioCtx.decodeAudioData(bufferCopy);
+                    const source = audioCtx.createBufferSource();
+                    source.buffer = decodedData;
+                    source.connect(audioCtx.destination);
+                    source.start(0);
+                    currentActiveAudioSource = source;
+                } else {
+                    playSynthBeep(mode);
+                }
+            } catch (err) {
+                console.warn("Fallback to synth tone:", err);
+                playSynthBeep(mode);
+            }
+        }
+
+        // --- ALARM CONTROLLER ---
+        let alarms = JSON.parse(localStorage.getItem('slock_alarms') || '[]');
+
+        function formatDaysText(days) {
+            if (!days || days.length === 0) return 'Once';
+            if (days.length === 7) return 'Everyday';
+            const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            return days.map(d => names[d]).join(', ');
+        }
+
+        function renderAlarms() {
+            const container = document.getElementById('alarmsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            let activeCount = 0;
+            alarms.forEach((alarm, index) => {
+                if (alarm.enabled) activeCount++;
+                const daysText = formatDaysText(alarm.days);
+                const card = document.createElement('div');
+                card.className = `p-4 rounded-2xl glass-card flex items-center justify-between border ${alarm.enabled ? 'border-teal-500/40' : 'border-slate-800'}`;
+                card.innerHTML = `
+                    <div>
+                        <div class="text-2xl font-mono font-bold ${alarm.enabled ? 'text-teal-300' : 'text-slate-500'}">${alarm.time}</div>
+                        <div class="text-xs text-slate-400">${alarm.label || 'Alarm'} • <span class="text-teal-400">${daysText}</span></div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" ${alarm.enabled ? 'checked' : ''} onchange="toggleAlarm(${index})" class="w-5 h-5 accent-teal-400 rounded cursor-pointer">
+                        <button onclick="deleteAlarm(${index})" class="text-slate-500 hover:text-red-400 p-2 transition">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            const activeElem = document.getElementById('activeAlarmsCount');
+            if (activeElem) activeElem.textContent = `${activeCount} Alarm${activeCount !== 1 ? 's' : ''} Active`;
+            if (alarms.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-500 text-sm glass-card rounded-2xl">No alarms configured.</div>`;
+            }
+        }
+
+        document.getElementById('alarmForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const timeVal = document.getElementById('alarmTimeInput').value;
+            const labelVal = document.getElementById('alarmLabelInput').value;
+            if (!timeVal) return;
+
+            const selectedDays = [];
+            document.querySelectorAll('.alarm-day-input:checked').forEach(cb => {
+                selectedDays.push(parseInt(cb.value));
+            });
+
+            const [h, m] = timeVal.split(':');
+            let hours = parseInt(h);
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12 || 12;
+            const formattedTime = `${String(hours).padStart(2, '0')}:${m} ${ampm}`;
+
+            alarms.push({ 
+                rawTime: timeVal, 
+                time: formattedTime, 
+                label: labelVal, 
+                enabled: true, 
+                days: selectedDays,
+                lastTriggered: '' 
+            });
+            localStorage.setItem('slock_alarms', JSON.stringify(alarms));
+            renderAlarms();
+            document.getElementById('alarmForm').reset();
+            document.querySelectorAll('.alarm-day-input').forEach(cb => cb.checked = false);
+        });
+
+        function toggleAlarm(index) {
+            alarms[index].enabled = !alarms[index].enabled;
+            localStorage.setItem('slock_alarms', JSON.stringify(alarms));
+            renderAlarms();
+        }
+
+        function deleteAlarm(index) {
+            alarms.splice(index, 1);
+            localStorage.setItem('slock_alarms', JSON.stringify(alarms));
+            renderAlarms();
+        }
+
+        let alarmInterval = null;
+        function checkAlarms(now) {
+            const currentHours = String(now.getHours()).padStart(2, '0');
+            const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+            const currentTimeStr = `${currentHours}:${currentMinutes}`;
+            const currentDayOfWeek = now.getDay();
+            const todayStr = now.toDateString();
+
+            alarms.forEach(alarm => {
+                if (!alarm.enabled) return;
+                const isDayMatching = !alarm.days || alarm.days.length === 0 || alarm.days.includes(currentDayOfWeek);
+
+                if (isDayMatching && alarm.rawTime === currentTimeStr && alarm.lastTriggered !== todayStr) {
+                    alarm.lastTriggered = todayStr;
+                    localStorage.setItem('slock_alarms', JSON.stringify(alarms));
+                    triggerAlarmModal(alarm);
+
+                    if ("Notification" in window && Notification.permission === "granted") {
+                        new Notification("Slock Alarm", {
+                            body: alarm.label || `Alarm time: ${alarm.time}`
+                        });
+                    }
+                }
+            });
+        }
+
+        function triggerAlarmModal(alarm) {
+            document.getElementById('modalAlarmTime').textContent = alarm.time;
+            document.getElementById('modalAlarmLabel').textContent = alarm.label || 'Alarm Triggered!';
+            document.getElementById('alarmModal').classList.remove('hidden');
+            document.getElementById('alarmModal').classList.add('flex');
+            
+            playSound('alarm');
+            alarmInterval = setInterval(() => playSound('alarm'), 1200);
+        }
+
+        function stopAlarmModal() {
+            document.getElementById('alarmModal').classList.add('hidden');
+            document.getElementById('alarmModal').classList.remove('flex');
+            if (alarmInterval) clearInterval(alarmInterval);
+            if (currentActiveAudioSource) {
+                try { currentActiveAudioSource.stop(); } catch(e){}
+            }
+        }
+
+        // --- CLOCK CONTROLLER ---
+        function updateClock() {
+            const now = new Date();
+            let hours = now.getHours();
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12 || 12;
+            const hoursStr = String(hours).padStart(2, '0');
+
+            const clockTimeElem = document.getElementById('clockTime');
+            if (clockTimeElem) clockTimeElem.textContent = `${hoursStr}:${minutes}:${seconds} ${ampm}`;
+            
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const clockDateElem = document.getElementById('clockDate');
+            if (clockDateElem) clockDateElem.textContent = now.toLocaleDateString('en-US', options);
+
+            checkAlarms(now);
+        }
+
+        renderAlarms();
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- STOPWATCH CONTROLLER ---
+        let swInterval = null;
+        let swStartTime = 0;
+        let swElapsedTime = 0;
+        let swIsRunning = false;
+        let swLaps = [];
+        let swLastLapTime = 0;
+
+        function formatStopwatchTime(ms) {
+            const totalSec = Math.floor(ms / 1000);
+            const minutes = String(Math.floor(totalSec / 60)).padStart(2, '0');
+            const seconds = String(totalSec % 60).padStart(2, '0');
+            const hundredths = String(Math.floor((ms % 1000) / 10)).padStart(2, '0');
+            return `${minutes}:${seconds}.${hundredths}`;
+        }
+
+        function toggleStopwatch() {
+            const startBtn = document.getElementById('swStartBtn');
+            const lapBtn = document.getElementById('swLapBtn');
+
+            if (!swIsRunning) {
+                swIsRunning = true;
+                swStartTime = Date.now() - swElapsedTime;
+                swInterval = setInterval(() => {
+                    swElapsedTime = Date.now() - swStartTime;
+                    document.getElementById('stopwatchDisplay').textContent = formatStopwatchTime(swElapsedTime);
+                }, 10);
+                startBtn.innerHTML = `<i class="fa-solid fa-pause"></i>`;
+                startBtn.classList.remove('from-emerald-400', 'to-teal-500');
+                startBtn.classList.add('from-amber-400', 'to-orange-500');
+                lapBtn.disabled = false;
+            } else {
+                swIsRunning = false;
+                clearInterval(swInterval);
+                startBtn.innerHTML = `<i class="fa-solid fa-play ml-1"></i>`;
+                startBtn.classList.remove('from-amber-400', 'to-orange-500');
+                startBtn.classList.add('from-emerald-400', 'to-teal-500');
+                lapBtn.disabled = true;
+            }
+        }
+
+        function recordLap() {
+            if (!swIsRunning) return;
+            playSound('stopwatch');
+
+            const currentTotal = swElapsedTime;
+            const splitTime = currentTotal - swLastLapTime;
+            swLastLapTime = currentTotal;
+
+            swLaps.unshift({
+                lapNum: swLaps.length + 1,
+                split: formatStopwatchTime(splitTime),
+                total: formatStopwatchTime(currentTotal)
+            });
+
+            renderLaps();
+        }
+
+        function renderLaps() {
+            const container = document.getElementById('lapsList');
+            if (!container) return;
+            container.innerHTML = '';
+            swLaps.forEach(lap => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center text-sm py-2 px-4 rounded-xl bg-slate-900/60 border border-slate-800/60 font-mono';
+                item.innerHTML = `
+                    <span class="text-teal-400 font-bold">#${lap.lapNum}</span>
+                    <span class="text-slate-300">+${lap.split}</span>
+                    <span class="text-slate-400">${lap.total}</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function resetStopwatch() {
+            swIsRunning = false;
+            clearInterval(swInterval);
+            swElapsedTime = 0;
+            swLastLapTime = 0;
+            swLaps = [];
+            document.getElementById('stopwatchDisplay').textContent = '00:00.00';
+            const startBtn = document.getElementById('swStartBtn');
+            startBtn.innerHTML = `<i class="fa-solid fa-play ml-1"></i>`;
+            startBtn.classList.remove('from-amber-400', 'to-orange-500');
+            startBtn.classList.add('from-emerald-400', 'to-teal-500');
+            document.getElementById('swLapBtn').disabled = true;
+            document.getElementById('lapsList').innerHTML = `<div class="text-center py-10 text-slate-500 text-sm">No laps recorded.</div>`;
+        }
+
+        // --- TIMER CONTROLLER ---
+        let tmInterval = null;
+        let tmRemainingSeconds = 0;
+        let tmIsRunning = false;
+
+        function formatTimerTime(totalSec) {
+            const hours = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+            const minutes = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+            const seconds = String(totalSec % 60).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+
+        function toggleTimer() {
+            const startBtn = document.getElementById('timerStartBtn');
+            const inputs = document.getElementById('timerInputControls');
+            const activeDisplay = document.getElementById('timerActiveDisplay');
+
+            if (!tmIsRunning) {
+                if (tmRemainingSeconds <= 0) {
+                    const hrs = parseInt(document.getElementById('timerHours').value) || 0;
+                    const mins = parseInt(document.getElementById('timerMinutes').value) || 0;
+                    const secs = parseInt(document.getElementById('timerSeconds').value) || 0;
+                    tmRemainingSeconds = hrs * 3600 + mins * 60 + secs;
+                }
+
+                if (tmRemainingSeconds <= 0) return;
+
+                tmIsRunning = true;
+                inputs.classList.add('hidden');
+                activeDisplay.classList.remove('hidden');
+                activeDisplay.textContent = formatTimerTime(tmRemainingSeconds);
+
+                startBtn.innerHTML = `<i class="fa-solid fa-pause"></i>`;
+                startBtn.classList.remove('from-cyan-400', 'to-blue-500');
+                startBtn.classList.add('from-amber-400', 'to-orange-500');
+
+                tmInterval = setInterval(() => {
+                    tmRemainingSeconds--;
+                    activeDisplay.textContent = formatTimerTime(tmRemainingSeconds);
+
+                    if (tmRemainingSeconds <= 0) {
+                        clearInterval(tmInterval);
+                        tmIsRunning = false;
+                        playSound('timer');
+                        triggerAlarmModal({ time: '00:00:00', label: 'Countdown Finished!' });
+                        resetTimer();
+                    }
+                }, 1000);
+            } else {
+                tmIsRunning = false;
+                clearInterval(tmInterval);
+                startBtn.innerHTML = `<i class="fa-solid fa-play ml-1"></i>`;
+                startBtn.classList.remove('from-amber-400', 'to-orange-500');
+                startBtn.classList.add('from-cyan-400', 'to-blue-500');
+            }
+        }
+
+        function resetTimer() {
+            tmIsRunning = false;
+            clearInterval(tmInterval);
+            tmRemainingSeconds = 0;
+            document.getElementById('timerInputControls').classList.remove('hidden');
+            document.getElementById('timerActiveDisplay').classList.add('hidden');
+            const startBtn = document.getElementById('timerStartBtn');
+            startBtn.innerHTML = `<i class="fa-solid fa-play ml-1"></i>`;
+            startBtn.classList.remove('from-amber-400', 'to-orange-500');
+            startBtn.classList.add('from-cyan-400', 'to-blue-500');
+        }
+    </script>
+</body>
+</html>
