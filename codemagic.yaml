@@ -7,16 +7,20 @@ workflows:
       node: 22.11.0
       xcode: latest
     scripts:
-      - name: 1. Install Dependencies
+      - name: 1. Setup Project and Web Directory
         script: |
           npm install
+          mkdir -p www
+          if [ -f "index.html" ]; then
+            cp index.html www/index.html
+          fi
       - name: 2. Create Capacitor Config
         script: |
           cat << 'EOF' > capacitor.config.json
           {
             "appId": "com.slock.app",
             "appName": "Slock",
-            "webDir": ".",
+            "webDir": "www",
             "bundledWebRuntime": false
           }
           EOF
