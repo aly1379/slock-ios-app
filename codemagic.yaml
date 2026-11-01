@@ -19,16 +19,14 @@ workflows:
             "bundledWebRuntime": false
           }
           EOF
-      - name: 2. Generate iOS Platform Files
+      - name: 2. Add and Sync iOS Platform
         script: |
-          sudo gem install cocoapods
           npx cap add ios
-          npx cap copy ios
-      - name: 3. Compile iOS App Archive
+          npx cap sync ios
+      - name: 3. Build iOS App
         script: |
           cd ios/App
-          pod install
-          xcodebuild -workspace App.xcworkspace \
+          xcodebuild -project App.xcodeproj \
                      -scheme App \
                      -configuration Release \
                      -sdk iphoneos \
